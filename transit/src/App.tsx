@@ -1,4 +1,4 @@
-import Map from './map'
+import Map from './Map'
 
 export default function App() {
   return (
@@ -7,7 +7,7 @@ export default function App() {
         position: 'relative',
         height: '100vh',
         width: '100%',
-        overflow: 'hidden'
+        overflow: 'hidden'  
       }}
     >
       <Map />

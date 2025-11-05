@@ -24,14 +24,16 @@ export default function Map() {
     if (mapRef.current || !containerRef.current) return;
 
     const styleUrl = import.meta.env.VITE_MAP_STYLE_URL as string | undefined;
+    const defaultStyle = 'https://tiles.openfreemap.org/styles/bright';
+    
     if (!styleUrl) {
       // eslint-disable-next-line no-console
-      console.warn('VITE_MAP_STYLE_URL is not set. Define it in .env.local to a valid MapLibre style URL.');
+      console.warn('VITE_MAP_STYLE_URL is not set. Using default style:', defaultStyle);
     }
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: styleUrl ?? '', // if empty, map will error; set your style URL in .env.local
+      style: styleUrl ?? defaultStyle,
       center: DEFAULT_CENTER,
       zoom: DEFAULT_ZOOM
     });
