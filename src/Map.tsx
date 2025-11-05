@@ -16,7 +16,12 @@ const EMPTY_STOPS: FeatureCollection<Point> = {
   features: []
 };
 
-export default function Map() {
+interface MapProps {
+  width?: number | string;
+  height?: number | string;
+}
+
+export default function Map({ width = 800, height = 500 }: MapProps) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const mapRef = useRef<MlMap | null>(null);
 
@@ -80,6 +85,5 @@ export default function Map() {
     };
   }, []);
 
-  // Full-viewport container; parent must not constrain height to 0
-  return <div ref={containerRef} style={{ position: 'absolute', inset: 0 }} />;
+  return <div ref={containerRef} style={{ width, height }} />;
 }
