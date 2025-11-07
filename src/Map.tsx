@@ -1,6 +1,6 @@
 import { useEffect, useRef, useImperativeHandle, forwardRef } from 'react';
 import maplibregl, { Map as MlMap, type LngLatLike } from 'maplibre-gl';
-import type { FeatureCollection, LineString, Point } from 'geojson';
+import type { FeatureCollection, LineString, Point, Polygon } from 'geojson';
 import type { Route } from './types/route';
 import 'maplibre-gl/dist/maplibre-gl.css';
 
@@ -17,6 +17,11 @@ const EMPTY_STOPS: FeatureCollection<Point> = {
   features: []
 };
 
+const EMPTY_BOUNDARIES: FeatureCollection<Polygon> = {
+  type: 'FeatureCollection',
+  features: []
+};
+
 interface MapProps {
   width?: number | string;
   height?: number | string;
@@ -28,6 +33,8 @@ export interface MapRef {
   setRoutes: (routes: Route[]) => void;
   clearRoutes: () => void;
   updateRoutes: (geoJSON: FeatureCollection<LineString>) => void;
+  loadDABoundaries: (geoJSON: FeatureCollection<Polygon>) => void;
+  clearDABoundaries: () => void;
 }
 
 const Map = forwardRef<MapRef, MapProps>(({ width = 800, height = 500 }, ref) => {
@@ -65,8 +72,35 @@ const Map = forwardRef<MapRef, MapProps>(({ width = 800, height = 500 }, ref) =>
         type: 'geojson',
         data: EMPTY_STOPS
       });
+      map.addSource('da-boundaries', {
+        type: 'geojson',
+        data: EMPTY_BOUNDARIES
+      });
 
-      // Styled line layer for routes with data-driven styling for colors
+      // Fill layer for DA boundaries (add first so it appears below routes)
+      map.addLayer({
+        id: 'da-boundaries-fill',
+        type: 'fill',
+        source: 'da-boundaries',
+        paint: {
+          'fill-color': '#00FF00',  // Bright green for maximum visibility
+          'fill-opacity': 0.3
+        }
+      });
+
+      // Stroke layer for DA boundaries (highlighted borders)
+      map.addLayer({
+        id: 'da-boundaries-stroke',
+        type: 'line',
+        source: 'da-boundaries',
+        paint: {
+          'line-color': '#008000',  // Dark green for contrast
+          'line-width': 3,  // Thicker lines
+          'line-opacity': 1.0
+        }
+      });
+
+      // Styled line layer for routes with data-driven styling for colors (on top of boundaries)
       map.addLayer({
         id: 'routes-line',
         type: 'line',
@@ -80,7 +114,7 @@ const Map = forwardRef<MapRef, MapProps>(({ width = 800, height = 500 }, ref) =>
         }
       });
 
-      // Styled circle layer for stops
+      // Styled circle layer for stops (on top of everything)
       map.addLayer({
         id: 'stops-circle',
         type: 'circle',
@@ -229,6 +263,102 @@ const Map = forwardRef<MapRef, MapProps>(({ width = 800, height = 500 }, ref) =>
       const source = mapRef.current.getSource('routes') as maplibregl.GeoJSONSource;
       if (source) {
         source.setData(EMPTY_ROUTES);
+      }
+    },
+    // Load DA boundaries GeoJSON
+    loadDABoundaries: (geoJSON: FeatureCollection<Polygon>) => {
+      if (!mapRef.current) {
+        // eslint-disable-next-line no-console
+        console.error('Map ref is not available');
+        return;
+      }
+      
+      // eslint-disable-next-line no-console
+      console.log('loadDABoundaries called with', geoJSON.features.length, 'features');
+      // eslint-disable-next-line no-console
+      console.log('Map ready?', isMapReadyRef.current);
+      
+      const tryUpdate = () => {
+        if (!mapRef.current) {
+          // eslint-disable-next-line no-console
+          console.error('Map ref lost during update');
+          return false;
+        }
+        const source = mapRef.current.getSource('da-boundaries') as maplibregl.GeoJSONSource | undefined;
+        if (source) {
+          // eslint-disable-next-line no-console
+          console.log('Setting DA boundaries data on map source');
+          source.setData(geoJSON);
+          
+          // Get the bounds of all features to see if they're visible
+          if (geoJSON.features.length > 0) {
+            const coords = geoJSON.features.flatMap(f => {
+              if (f.geometry.type === 'Polygon') {
+                return f.geometry.coordinates[0];
+              }
+              return [];
+            });
+            if (coords.length > 0) {
+              const lngs = coords.map(c => c[0]);
+              const lats = coords.map(c => c[1]);
+              // eslint-disable-next-line no-console
+              console.log('Boundaries extent:', {
+                minLng: Math.min(...lngs),
+                maxLng: Math.max(...lngs),
+                minLat: Math.min(...lats),
+                maxLat: Math.max(...lats)
+              });
+            }
+          }
+          
+          return true;
+        }
+        // eslint-disable-next-line no-console
+        console.warn('DA boundaries source not found');
+        return false;
+      };
+      
+      // If map is ready, try immediately
+      if (isMapReadyRef.current && mapRef.current.isStyleLoaded()) {
+        // eslint-disable-next-line no-console
+        console.log('Map is ready, updating immediately');
+        if (tryUpdate()) return;
+        setTimeout(() => {
+          // eslint-disable-next-line no-console
+          console.log('Retrying update after 50ms');
+          tryUpdate();
+        }, 50);
+        return;
+      }
+      
+      // Map not ready yet, wait for load event
+      // eslint-disable-next-line no-console
+      console.log('Map not ready, waiting for load event');
+      const waitForLoad = () => {
+        if (!mapRef.current) return;
+        mapRef.current.once('load', () => {
+          // eslint-disable-next-line no-console
+          console.log('Map load event fired, updating DA boundaries');
+          setTimeout(() => tryUpdate(), 100);
+        });
+      };
+      
+      if (!mapRef.current.isStyleLoaded()) {
+        waitForLoad();
+      } else {
+        setTimeout(() => {
+          if (!tryUpdate()) {
+            waitForLoad();
+          }
+        }, 100);
+      }
+    },
+    // Clear DA boundaries
+    clearDABoundaries: () => {
+      if (!mapRef.current) return;
+      const source = mapRef.current.getSource('da-boundaries') as maplibregl.GeoJSONSource;
+      if (source) {
+        source.setData(EMPTY_BOUNDARIES);
       }
     }
   }), []);

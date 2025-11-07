@@ -2,6 +2,7 @@ import { useRef, useEffect } from 'react';
 import Map, { type MapRef } from './Map';
 import { useRoutes } from './hooks/useRoutes';
 import type { Route } from './types/route';
+import { loadOttawaDABoundaries } from './utils/geoTransform';
 
 export default function App() {
   const mapRef = useRef<MapRef>(null);
@@ -43,13 +44,41 @@ export default function App() {
       }
     ];
 
-    // Add routes after ensuring map is loaded
+    // Add routes and load DA boundaries after ensuring map is loaded
     // Use a longer delay to ensure map is fully initialized
-    const timer = setTimeout(() => {
+    const timer = setTimeout(async () => {
       if (mapRef.current) {
         addRoutes(sampleRoutes);
         // eslint-disable-next-line no-console
         console.log(`Loaded ${getRouteCount()} routes`);
+        
+        // Load and display DA boundaries
+        try {
+          // eslint-disable-next-line no-console
+          console.log('Loading DA boundaries...');
+          const boundaries = await loadOttawaDABoundaries();
+          // eslint-disable-next-line no-console
+          console.log(`Transformed ${boundaries.features.length} DA boundaries`);
+          // eslint-disable-next-line no-console
+          console.log('Sample feature:', boundaries.features[0]);
+          
+          if (boundaries.features.length > 0) {
+            // Check if coordinates look correct (should be longitude/latitude)
+            const firstFeature = boundaries.features[0];
+            if (firstFeature.geometry.type === 'Polygon' && firstFeature.geometry.coordinates[0]) {
+              const firstCoord = firstFeature.geometry.coordinates[0][0];
+              // eslint-disable-next-line no-console
+              console.log('First coordinate:', firstCoord, '(should be [lng, lat] around -75, 45)');
+            }
+          }
+          
+          mapRef.current.loadDABoundaries(boundaries);
+          // eslint-disable-next-line no-console
+          console.log('DA boundaries loaded into map');
+        } catch (error) {
+          // eslint-disable-next-line no-console
+          console.error('Failed to load DA boundaries:', error);
+        }
       }
     }, 1500);
 
